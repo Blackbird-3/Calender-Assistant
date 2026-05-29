@@ -1,0 +1,13 @@
+fastapi
+uvicorn
+pydantic
+apscheduler
+supabase
+google-genai
+notion-client
+mcp
+google-auth
+google-auth-oauthlib
+google-auth-httplib2
+google-api-python-client
+python-dotenv
