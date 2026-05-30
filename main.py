@@ -2,6 +2,7 @@ import os
 import json
 import logging
 from datetime import datetime
+from typing import Optional, Dict, Any
 from fastapi import FastAPI, Request
 from pydantic import BaseModel
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -10,6 +11,7 @@ import httpx
 
 from database import upsert_task_state, get_incomplete_tasks
 from agent import prioritize_tasks, schedule_tasks, process_webhook_interrupt
+
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -23,22 +25,22 @@ system_state = {
     "status": "IDLE" # IDLE, AWAITING_REVIEW
 }
 
-GOOGLE_CHAT_WEBHOOK_URL = os.environ.get("GOOGLE_CHAT_WEBHOOK_URL", "")
+DISCORD_WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL", "")
 
 class WebhookPayload(BaseModel):
-    text: str
-    sender: str
+    content: str
+    sender: Optional[str] = None
 
-async def send_google_chat_message(text: str):
-    if not GOOGLE_CHAT_WEBHOOK_URL:
-        logger.warning(f"Google Chat Webhook not set. Mock sending message: {text}")
+async def send_discord_message(text: str):
+    if not DISCORD_WEBHOOK_URL:
+        logger.warning(f"Discord Webhook URL not set. Mock sending message: {text}")
         return
     async with httpx.AsyncClient() as client:
-        payload = {"text": text}
+        payload = {"content": text}
         try:
-            await client.post(GOOGLE_CHAT_WEBHOOK_URL, json=payload)
+            await client.post(DISCORD_WEBHOOK_URL, json=payload)
         except Exception as e:
-            logger.error(f"Failed to send Google Chat message: {e}")
+            logger.error(f"Failed to send Discord message: {e}")
 
 async def nightly_triage_job():
     """
@@ -46,7 +48,7 @@ async def nightly_triage_job():
     """
     logger.info("Starting Nightly Triage...")
     # Step 1: Post-mortem ping
-    await send_google_chat_message("Did you finish the prioritized tasks today? Reply with updates.")
+    await send_discord_message("Did you finish the prioritized tasks today? Reply with updates.")
     
     system_state["status"] = "AWAITING_REVIEW"
     upsert_task_state("system_state", {"status": "AWAITING_REVIEW", "last_updated": datetime.now().isoformat()})
@@ -66,7 +68,7 @@ async def nightly_triage_job():
     for ev in new_schedule:
         schedule_markdown += f"- **{ev.get('title')}**: {ev.get('start_time')} - {ev.get('end_time')}\n"
         
-    await send_google_chat_message(schedule_markdown)
+    await send_discord_message(schedule_markdown)
     logger.info("Nightly Triage Forecast sent.")
 
 @app.on_event("startup")
@@ -90,11 +92,11 @@ def health_check():
 @app.post("/webhook")
 async def webhook_handler(request: Request):
     """
-    Handles incoming messages from Google Chat via HTTP Webhook.
+    Handles incoming messages from Discord (e.g. forwarded via integration) via HTTP Webhook.
     """
     body = await request.json()
-    # Handle both plain text formats or Google Chat specific structure
-    message_text = body.get("message", {}).get("text", body.get("text", "")).strip()
+    # Handle plain text formats, Discord (content), or Google Chat structure
+    message_text = body.get("message", {}).get("text", body.get("content", body.get("text", ""))).strip()
     
     logger.info(f"Received webhook payload: {message_text}")
     
@@ -107,18 +109,19 @@ async def webhook_handler(request: Request):
         new_schedule = process_webhook_interrupt(current_schedule, message_text, current_time)
         
         # Pushing new schedule via Calendar MCP (handled implicitly or through a wrapper client)
-        await send_google_chat_message(f"Urgent task inserted. Schedule updated: \n```json\n{json.dumps(new_schedule, indent=2)}\n```")
+        await send_discord_message(f"Urgent task inserted. Schedule updated: \n```json\n{json.dumps(new_schedule, indent=2)}\n```")
         return {"status": "interrupt processed"}
         
     elif system_state["status"] == "AWAITING_REVIEW":
         logger.info("Processing user review response.")
         if "looks good" in message_text.lower() or "approve" in message_text.lower():
-            await send_google_chat_message("Confirmed. Pushing schedule to Google Calendar.")
+            await send_discord_message("Confirmed. Pushing schedule to Google Calendar.")
             system_state["status"] = "IDLE"
             upsert_task_state("system_state", {"status": "IDLE", "last_updated": datetime.now().isoformat()})
         else:
-            await send_google_chat_message("Updating schedule based on your feedback...")
+            await send_discord_message("Updating schedule based on your feedback...")
             # Re-run LLM scheduler with text constraint
         return {"status": "review processed"}
         
     return {"status": "ignored"}
+
