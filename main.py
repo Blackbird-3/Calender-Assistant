@@ -58,6 +58,12 @@ async def modify_command(ctx, *, feedback: str):
     await ctx.send(f"Feedback received: '{feedback}'. Updating schedule...")
     # Logic to adjust schedule based on feedback
 
+@bot.command(name="triage")
+async def triage_command(ctx):
+    await ctx.send("Manually triggering nightly triage job...")
+    await nightly_triage_job()
+
+
 async def send_discord_message(text: str):
     # Sends a message to a specific channel if DISCORD_CHANNEL_ID is set
     channel_id_str = os.environ.get("DISCORD_CHANNEL_ID")
