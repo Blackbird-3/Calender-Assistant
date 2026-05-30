@@ -109,8 +109,12 @@ async def now_command(ctx, *, task: str = ""):
     current_time = datetime.now().isoformat()
     await ctx.send("Fetching active schedule from Google Calendar...")
     
-    # 1. Fetch current day events from Google Calendar
-    events = get_events()
+    # 1. Fetch next 24 hours of events from Google Calendar
+    from datetime import timedelta
+    now_dt = datetime.utcnow()
+    time_min = now_dt.isoformat() + 'Z'
+    time_max = (now_dt + timedelta(hours=24)).isoformat() + 'Z'
+    events = get_events(time_min=time_min, time_max=time_max)
     current_schedule = []
     for event in events:
         is_flex = '[Flexible]' in event.get('description', '') or '#flex' in event.get('description', '')

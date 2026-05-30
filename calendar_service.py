@@ -82,10 +82,12 @@ def update_calendar_schedule(new_schedule):
     Clears all existing flexible events for today (after current time) and inserts the new schedule.
     """
     try:
-        now = datetime.datetime.utcnow().isoformat() + 'Z'
-        events = get_events(time_min=now)
+        now = datetime.datetime.utcnow()
+        time_min = now.isoformat() + 'Z'
+        time_max = (now + datetime.timedelta(hours=24)).isoformat() + 'Z'
+        events = get_events(time_min=time_min, time_max=time_max)
         
-        # 1. Wipe out existing flexible blocks
+        # 1. Wipe out existing flexible blocks in the next 24 hours
         for event in events:
             desc = event.get('description', '')
             if '[Flexible]' in desc or '#flex' in desc:
@@ -95,6 +97,9 @@ def update_calendar_schedule(new_schedule):
         # 2. Inject the newly computed schedule
         success = True
         for item in new_schedule:
+            if item.get("type", "").lower() == "fixed":
+                continue  # Do not duplicate fixed events
+                
             title = item.get('title', item.get('task_name', 'Scheduled Task'))
             start = item.get('start_time')
             end = item.get('end_time')
