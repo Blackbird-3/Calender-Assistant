@@ -54,6 +54,12 @@ def delete_event(event_id: str):
 
 def create_event(title: str, start_time: str, end_time: str, description: str = ""):
     try:
+        # Append 'Z' if start_time is naive to avoid Google Calendar API 400 error
+        if not ('+' in start_time or '-' in start_time[-6:] or start_time.endswith('Z')):
+            start_time += 'Z'
+        if not ('+' in end_time or '-' in end_time[-6:] or end_time.endswith('Z')):
+            end_time += 'Z'
+            
         service = get_calendar_service()
         event = {
             'summary': title,
@@ -75,20 +81,28 @@ def update_calendar_schedule(new_schedule):
     """
     Clears all existing flexible events for today (after current time) and inserts the new schedule.
     """
-    now = datetime.datetime.utcnow().isoformat() + 'Z'
-    events = get_events(time_min=now)
-    
-    # 1. Wipe out existing flexible blocks
-    for event in events:
-        desc = event.get('description', '')
-        if '[Flexible]' in desc or '#flex' in desc:
-            logger.info(f"Deleting flexible event: {event.get('summary')}")
-            delete_event(event.get('id'))
-            
-    # 2. Inject the newly computed schedule
-    for item in new_schedule:
-        title = item.get('title', item.get('task_name', 'Scheduled Task'))
-        start = item.get('start_time')
-        end = item.get('end_time')
-        # Mark as flexible so we can delete/shift it later if needed
-        create_event(title, start, end, description="[Flexible] Scheduled by Orchestrator")
+    try:
+        now = datetime.datetime.utcnow().isoformat() + 'Z'
+        events = get_events(time_min=now)
+        
+        # 1. Wipe out existing flexible blocks
+        for event in events:
+            desc = event.get('description', '')
+            if '[Flexible]' in desc or '#flex' in desc:
+                logger.info(f"Deleting flexible event: {event.get('summary')}")
+                delete_event(event.get('id'))
+                
+        # 2. Inject the newly computed schedule
+        success = True
+        for item in new_schedule:
+            title = item.get('title', item.get('task_name', 'Scheduled Task'))
+            start = item.get('start_time')
+            end = item.get('end_time')
+            # Mark as flexible so we can delete/shift it later if needed
+            event = create_event(title, start, end, description="[Flexible] Scheduled by Orchestrator")
+            if not event:
+                success = False
+        return success
+    except Exception as e:
+        logger.error(f"Error updating calendar schedule: {e}")
+        return False

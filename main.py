@@ -86,8 +86,11 @@ async def on_message(message):
                 upsert_task_state("system_state", {"status": "IDLE", "last_updated": datetime.now().isoformat()})
                 forecast_schedule = system_state.get("forecast_schedule", [])
                 if forecast_schedule:
-                    update_calendar_schedule(forecast_schedule)
-                    await message.channel.send("Calendar successfully updated!")
+                    success = update_calendar_schedule(forecast_schedule)
+                    if success:
+                        await message.channel.send("Calendar successfully updated!")
+                    else:
+                        await message.channel.send("⚠️ Failed to update Google Calendar. Check Render logs for Google API errors.")
             elif action == "modify":
                 # Reschedule with feedback
                 # (Simple representation: modifying current schedule with agent logic)
@@ -122,9 +125,11 @@ async def now_command(ctx, *, task: str = ""):
     new_schedule = process_webhook_interrupt(current_schedule, task, current_time)
     
     # 3. Update Google Calendar
-    update_calendar_schedule(new_schedule)
-    
-    await ctx.send(f"Urgent task inserted. Schedule updated: \n```json\n{json.dumps(new_schedule, indent=2)}\n```")
+    success = update_calendar_schedule(new_schedule)
+    if success:
+        await ctx.send(f"Urgent task inserted. Schedule updated: \n```json\n{json.dumps(new_schedule, indent=2)}\n```")
+    else:
+        await ctx.send("⚠️ Failed to update Google Calendar. Check Render logs for Google API errors.")
 
 @bot.command(name="approve")
 async def approve_command(ctx):
@@ -134,8 +139,11 @@ async def approve_command(ctx):
     
     forecast_schedule = system_state.get("forecast_schedule", [])
     if forecast_schedule:
-        update_calendar_schedule(forecast_schedule)
-        await ctx.send("Calendar successfully updated!")
+        success = update_calendar_schedule(forecast_schedule)
+        if success:
+            await ctx.send("Calendar successfully updated!")
+        else:
+            await ctx.send("⚠️ Failed to update Google Calendar. Check Render logs for Google API errors.")
     else:
         await ctx.send("No forecast schedule found to push.")
 

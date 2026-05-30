@@ -14,23 +14,39 @@ def get_supabase_client() -> Client:
 
 db = get_supabase_client()
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 def upsert_task_state(task_id: str, state_data: Dict[str, Any]):
     """
     Updates the state of a task in the Supabase Cloud Database.
     """
-    response = db.table("tasks").upsert({"id": task_id, **state_data}).execute()
-    return response
+    try:
+        response = db.table("tasks").upsert({"id": task_id, **state_data}).execute()
+        return response
+    except Exception as e:
+        logger.error(f"Supabase upsert error (ignoring for now): {e}")
+        return None
 
 def get_incomplete_tasks():
     """
     Retrieves all tasks marked as incomplete.
     """
-    response = db.table("tasks").select("*").eq("status", "incomplete").execute()
-    return response.data
+    try:
+        response = db.table("tasks").select("*").eq("status", "incomplete").execute()
+        return response.data
+    except Exception as e:
+        logger.error(f"Supabase select error (ignoring for now): {e}")
+        return []
 
 def log_system_metrics(metrics: Dict[str, Any]):
     """
     Records system metrics to the database.
     """
-    response = db.table("system_metrics").insert(metrics).execute()
-    return response
+    try:
+        response = db.table("system_metrics").insert(metrics).execute()
+        return response
+    except Exception as e:
+        logger.error(f"Supabase insert error (ignoring for now): {e}")
+        return None
