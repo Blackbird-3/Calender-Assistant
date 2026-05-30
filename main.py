@@ -8,9 +8,11 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 import discord
 from discord.ext import commands
+from google import genai
 
 from database import upsert_task_state, get_incomplete_tasks
 from agent import prioritize_tasks, schedule_tasks, process_webhook_interrupt
+from calendar_service import get_events, update_calendar_schedule
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -20,7 +22,8 @@ scheduler = AsyncIOScheduler()
 
 # Dummy state management mapping
 system_state = {
-    "status": "IDLE" # IDLE, AWAITING_REVIEW
+    "status": "IDLE", # IDLE, AWAITING_REVIEW
+    "forecast_schedule": []
 }
 
 DISCORD_BOT_TOKEN = os.environ.get("DISCORD_BOT_TOKEN", "")
@@ -34,6 +37,65 @@ bot = commands.Bot(command_prefix="/", intents=intents)
 async def on_ready():
     logger.info(f'Logged in as {bot.user}')
 
+@bot.event
+async def on_message(message):
+    # Ignore bot's own messages
+    if message.author == bot.user:
+        return
+        
+    # Check if the message is a command
+    ctx = await bot.get_context(message)
+    if ctx.valid:
+        await bot.process_commands(message)
+        return
+        
+    # Handle conversational reviews
+    if system_state["status"] == "AWAITING_REVIEW":
+        logger.info(f"Processing conversational review message: {message.content}")
+        client = genai.Client()
+        
+        prompt = f"""
+        The user is currently reviewing tomorrow's schedule forecast.
+        They said: "{message.content}"
+        
+        If this is a confirmation (e.g. "looks good", "approve", "looks clean", "ok"), output JSON: {{"action": "approve", "reply": "Confirmed! Pushing tomorrow's schedule to your calendar."}}
+        If this is a modification (e.g. "remove gym", "add 1 hour of piano"), output JSON: {{"action": "modify", "reply": "Updating schedule with your changes...", "feedback": "their specific request"}}
+        If they are asking a question (e.g. "what tasks did I have?"), output JSON: {{"action": "answer", "reply": "a helpful response answering their query"}}
+        
+        Return ONLY the raw JSON.
+        """
+        try:
+            response = client.models.generate_content(
+                model='gemini-2.5-flash',
+                contents=prompt,
+            )
+            text = response.text.strip()
+            if text.startswith("```json"):
+                text = text[7:]
+            if text.endswith("```"):
+                text = text[:-3]
+            res = json.loads(text.strip())
+            
+            action = res.get("action")
+            reply = res.get("reply")
+            
+            await message.channel.send(reply)
+            
+            if action == "approve":
+                system_state["status"] = "IDLE"
+                upsert_task_state("system_state", {"status": "IDLE", "last_updated": datetime.now().isoformat()})
+                forecast_schedule = system_state.get("forecast_schedule", [])
+                if forecast_schedule:
+                    update_calendar_schedule(forecast_schedule)
+                    await message.channel.send("Calendar successfully updated!")
+            elif action == "modify":
+                # Reschedule with feedback
+                # (Simple representation: modifying current schedule with agent logic)
+                pass
+        except Exception as e:
+            logger.error(f"Error handling conversational review message: {e}")
+            await message.channel.send("Sorry, I had trouble processing that request.")
+
 @bot.command(name="now")
 async def now_command(ctx, *, task: str = ""):
     logger.info("Processing mid-day real-time interrupt.")
@@ -42,8 +104,25 @@ async def now_command(ctx, *, task: str = ""):
         return
         
     current_time = datetime.now().isoformat()
-    current_schedule = [] # Mocked Calendar MCP
+    await ctx.send("Fetching active schedule from Google Calendar...")
+    
+    # 1. Fetch current day events from Google Calendar
+    events = get_events()
+    current_schedule = []
+    for event in events:
+        is_flex = '[Flexible]' in event.get('description', '') or '#flex' in event.get('description', '')
+        current_schedule.append({
+            "title": event.get('summary'),
+            "start_time": event.get('start', {}).get('dateTime'),
+            "end_time": event.get('end', {}).get('dateTime'),
+            "type": "flexible" if is_flex else "fixed"
+        })
+        
+    # 2. Reschedule
     new_schedule = process_webhook_interrupt(current_schedule, task, current_time)
+    
+    # 3. Update Google Calendar
+    update_calendar_schedule(new_schedule)
     
     await ctx.send(f"Urgent task inserted. Schedule updated: \n```json\n{json.dumps(new_schedule, indent=2)}\n```")
 
@@ -52,6 +131,13 @@ async def approve_command(ctx):
     await ctx.send("Confirmed. Pushing schedule to Google Calendar.")
     system_state["status"] = "IDLE"
     upsert_task_state("system_state", {"status": "IDLE", "last_updated": datetime.now().isoformat()})
+    
+    forecast_schedule = system_state.get("forecast_schedule", [])
+    if forecast_schedule:
+        update_calendar_schedule(forecast_schedule)
+        await ctx.send("Calendar successfully updated!")
+    else:
+        await ctx.send("No forecast schedule found to push.")
 
 @bot.command(name="modify")
 async def modify_command(ctx, *, feedback: str):
@@ -62,7 +148,6 @@ async def modify_command(ctx, *, feedback: str):
 async def triage_command(ctx):
     await ctx.send("Manually triggering nightly triage job...")
     await nightly_triage_job()
-
 
 async def send_discord_message(text: str):
     # Sends a message to a specific channel if DISCORD_CHANNEL_ID is set
@@ -93,6 +178,8 @@ async def nightly_triage_job():
     ]
     
     new_schedule = schedule_tasks(prioritized, fixed_events, datetime.now().isoformat())
+    system_state["forecast_schedule"] = new_schedule
+    
     schedule_markdown = "### Tomorrow's Forecast\n"
     for ev in new_schedule:
         schedule_markdown += f"- **{ev.get('title')}**: {ev.get('start_time')} - {ev.get('end_time')}\n"
