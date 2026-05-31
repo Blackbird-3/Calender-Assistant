@@ -90,7 +90,7 @@ async def on_message(message):
                         "type": "fixed"
                     })
             
-            new_schedule = await schedule_tasks(prioritized, fixed_events, now_dt.isoformat())
+            new_schedule = await schedule_tasks(prioritized, fixed_events, now_dt.isoformat(), user_updates=message.content)
             system_state["forecast_schedule"] = new_schedule
             
             if not new_schedule:
@@ -152,9 +152,23 @@ async def on_message(message):
                     else:
                         await message.channel.send("⚠️ Failed to update Google Calendar. Check Render logs for Google API errors.")
             elif action == "modify":
-                # Reschedule with feedback
-                # (Simple representation: modifying current schedule with agent logic)
-                pass
+                forecast_schedule = system_state.get("forecast_schedule", [])
+                if not forecast_schedule:
+                    await message.channel.send("⚠️ No active forecast found to modify. Please run `/triage` again.")
+                    return
+                
+                from agent import modify_schedule
+                berlin_tz = ZoneInfo("Europe/Berlin")
+                new_schedule = await modify_schedule(forecast_schedule, message.content, datetime.now(berlin_tz).isoformat())
+                
+                system_state["forecast_schedule"] = new_schedule
+                
+                schedule_markdown = "### Updated Forecast\n"
+                for ev in new_schedule:
+                    schedule_markdown += f"- **{ev.get('title')}**: {ev.get('start_time')} - {ev.get('end_time')}\n"
+                
+                await message.channel.send(schedule_markdown)
+                # Stay in AWAITING_REVIEW state so user can review the modified schedule
         except Exception as e:
             logger.error(f"Error handling conversational review message: {e}")
             await message.channel.send("Sorry, I had trouble processing that request.")
