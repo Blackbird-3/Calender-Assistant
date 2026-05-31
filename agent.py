@@ -7,6 +7,30 @@ def get_llm_client():
     # Uses GOOGLE_API_KEY environment variable implicitly
     return genai.Client()
 
+def extract_json_array(text: str) -> List[Any]:
+    text = text.strip()
+    if "```json" in text:
+        start = text.find("```json") + 7
+        end = text.find("```", start)
+        if end != -1:
+            text = text[start:end].strip()
+    elif "```" in text:
+        start = text.find("```") + 3
+        end = text.find("```", start)
+        if end != -1:
+            text = text[start:end].strip()
+    else:
+        # Fallback to finding the first [ and last ]
+        start = text.find('[')
+        end = text.rfind(']')
+        if start != -1 and end != -1 and start < end:
+            text = text[start:end+1].strip()
+            
+    parsed = json.loads(text)
+    if not isinstance(parsed, list):
+        raise ValueError("Parsed JSON is not a list")
+    return parsed
+
 async def prioritize_tasks(raw_tasks: str, goals: str) -> List[Dict[str, Any]]:
     """
     Takes unprioritized raw tasks from Notion and goals from Markdown.
@@ -31,16 +55,9 @@ async def prioritize_tasks(raw_tasks: str, goals: str) -> List[Dict[str, Any]]:
             model='gemini-2.5-flash',
             contents=prompt,
         )
-        text = response.text.strip()
-        import re
-        match = re.search(r'\[.*\]', text, re.DOTALL)
-        if match:
-            return json.loads(match.group(0))
-        else:
-            print("Error: Could not find JSON array in LLM response.")
-            return []
+        return extract_json_array(response.text)
     except Exception as e:
-        print(f"Error parsing LLM response: {e}\nRaw Text: {text if 'text' in locals() else 'None'}")
+        print(f"Error parsing LLM response: {e}")
         return []
 
 async def schedule_tasks(prioritized_tasks: List[Dict[str, Any]], fixed_events: List[Dict[str, Any]], current_time_str: str, user_updates: str = "", daily_routine: str = "", goals: str = "") -> List[Dict[str, Any]]:
@@ -84,20 +101,9 @@ async def schedule_tasks(prioritized_tasks: List[Dict[str, Any]], fixed_events: 
             model='gemini-2.5-flash',
             contents=prompt,
         )
-        text = response.text.strip()
-        import re
-        match = re.search(r'\[.*\]', text, re.DOTALL)
-        if match:
-            parsed = json.loads(match.group(0))
-            if not isinstance(parsed, list):
-                print("Error: LLM did not return a JSON array.")
-                return []
-            return parsed
-        else:
-            print("Error: Could not find JSON array in LLM response.")
-            return []
+        return extract_json_array(response.text)
     except Exception as e:
-        print(f"Error parsing LLM response: {e}\nRaw Text: {text if 'text' in locals() else 'None'}")
+        print(f"Error parsing LLM response: {e}")
         return []
 
 async def modify_schedule(schedule: List[Dict[str, Any]], user_feedback: str, current_time_str: str) -> List[Dict[str, Any]]:
@@ -126,20 +132,9 @@ async def modify_schedule(schedule: List[Dict[str, Any]], user_feedback: str, cu
             model='gemini-2.5-flash',
             contents=prompt,
         )
-        text = response.text.strip()
-        import re
-        match = re.search(r'\[.*\]', text, re.DOTALL)
-        if match:
-            parsed = json.loads(match.group(0))
-            if not isinstance(parsed, list):
-                print("Error: LLM did not return a JSON array.")
-                return schedule
-            return parsed
-        else:
-            print("Error: Could not find JSON array in LLM response.")
-            return schedule
+        return extract_json_array(response.text)
     except Exception as e:
-        print(f"Error parsing LLM response: {e}\nRaw Text: {text if 'text' in locals() else 'None'}")
+        print(f"Error parsing LLM response: {e}")
         return schedule
 
 async def process_webhook_interrupt(schedule: List[Dict[str, Any]], interrupt_message: str, current_time_str: str) -> List[Dict[str, Any]]:
