@@ -41,7 +41,7 @@ async def prioritize_tasks(raw_tasks: str, goals: str) -> List[Dict[str, Any]]:
         print(f"Error parsing LLM response: {e}")
         return []
 
-async def schedule_tasks(prioritized_tasks: List[Dict[str, Any]], fixed_events: List[Dict[str, Any]], current_time_str: str, user_updates: str = "") -> List[Dict[str, Any]]:
+async def schedule_tasks(prioritized_tasks: List[Dict[str, Any]], fixed_events: List[Dict[str, Any]], current_time_str: str, user_updates: str = "", daily_routine: str = "", goals: str = "") -> List[Dict[str, Any]]:
     """
     Computes an optimized schedule for the remaining blocks based on prioritized tasks.
     """
@@ -56,16 +56,25 @@ async def schedule_tasks(prioritized_tasks: List[Dict[str, Any]], fixed_events: 
     Prioritized Tasks Queue (from Notion):
     {json.dumps(prioritized_tasks, indent=2)}
     
+    Daily Routine & Human Constraints:
+    {daily_routine}
+    
+    Proactive Goals:
+    {goals}
+    
     User Updates / Direct Requests:
     "{user_updates}"
     
     Create a detailed daily schedule for tomorrow. 
-    Fit the highest priority tasks into the available open blocks around the fixed events.
+    First, schedule any buffer blocks for meals, sleep, hygiene, and gym as specified in the Daily Routine guidelines.
+    Then, fit the highest priority Notion tasks into the available open blocks around the fixed events and routine buffers.
+    If you have empty blocks after scheduling the Notion tasks, proactively schedule tasks that align with the Proactive Goals.
+    
     Return ONLY a JSON array of scheduled events with keys: "title", "start_time" (ISO format), "end_time" (ISO format), "type".
     IMPORTANT RULES: 
     1. For newly scheduled tasks, you MUST set "type" to "flexible". ONLY pre-existing fixed events should retain "type": "fixed".
     2. Do NOT break down a single task into multiple separate blocks. Schedule each task as a single contiguous time block.
-    3. You MUST prioritize and explicitly include any tasks directly requested in the "User Updates", even if they aren't in the Notion queue. If the user specifies a time constraint, respect it exactly.
+    3. You MUST prioritize and explicitly include any tasks directly requested in the "User Updates". Treat User Updates as absolute overrides. If the user specifies they don't need a gym day or a meal, skip it. If they specify a time constraint, respect it exactly.
     """
     
     try:

@@ -65,7 +65,16 @@ async def on_message(message):
         else:
             raw_tasks = f"Notion Tasks: {notion_tasks}\nUser Updates: {message.content}"
             
+        import os
         goals_md = "Focus on deep engineering sprints and fitness."
+        if os.path.exists("goals.md"):
+            with open("goals.md", "r") as f:
+                goals_md = f.read()
+                
+        daily_routine = ""
+        if os.path.exists("daily_routine.md"):
+            with open("daily_routine.md", "r") as f:
+                daily_routine = f.read()
         
         try:
             prioritized = await prioritize_tasks(raw_tasks, goals_md)
@@ -90,7 +99,14 @@ async def on_message(message):
                         "type": "fixed"
                     })
             
-            new_schedule = await schedule_tasks(prioritized, fixed_events, now_dt.isoformat(), user_updates=message.content)
+            new_schedule = await schedule_tasks(
+                prioritized, 
+                fixed_events, 
+                now_dt.isoformat(), 
+                user_updates=message.content,
+                daily_routine=daily_routine,
+                goals=goals_md
+            )
             system_state["forecast_schedule"] = new_schedule
             
             if not new_schedule:
