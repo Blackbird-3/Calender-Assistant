@@ -4,12 +4,12 @@ from notion_client import Client
 
 logger = logging.getLogger(__name__)
 
-NOTION_TOKEN = os.environ.get("NOTION_TOKEN")
+NOTION_TOKEN = os.environ.get("NOTION_API_KEY")
 NOTION_PAGE_ID = os.environ.get("NOTION_PAGE_ID")
 
 def get_notion_client():
     if not NOTION_TOKEN:
-        logger.warning("NOTION_TOKEN not set.")
+        logger.warning("NOTION_API_KEY not set.")
         return None
     return Client(auth=NOTION_TOKEN)
 

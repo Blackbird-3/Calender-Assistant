@@ -143,6 +143,30 @@ async def on_message(message):
         except Exception as e:
             logger.error(f"Error handling conversational review message: {e}")
             await message.channel.send("Sorry, I had trouble processing that request.")
+            
+    elif system_state.get("status", "IDLE") == "IDLE":
+        logger.info(f"Processing general conversation: {message.content}")
+        from notion_service import get_notion_tasks
+        notion_tasks = get_notion_tasks()
+        
+        client = genai.Client()
+        prompt = f"""
+        You are a helpful AI calendar and productivity assistant.
+        The user just said: "{message.content}"
+        
+        Here is the user's current Notion task list context:
+        {notion_tasks if notion_tasks else "No tasks found."}
+        
+        Answer their question or respond naturally, helpfully, and concisely.
+        """
+        try:
+            response = await client.aio.models.generate_content(
+                model='gemini-2.5-flash',
+                contents=prompt,
+            )
+            await message.channel.send(response.text.strip())
+        except Exception as e:
+            logger.error(f"Error in general conversation: {e}")
 
 @bot.command(name="now")
 async def now_command(ctx, *, task: str = ""):
