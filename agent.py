@@ -57,8 +57,7 @@ async def prioritize_tasks(raw_tasks: str, goals: str) -> List[Dict[str, Any]]:
         )
         return extract_json_array(response.text)
     except Exception as e:
-        print(f"Error parsing LLM response: {e}")
-        return []
+        raise RuntimeError(f"prioritize_tasks error: {e}")
 
 async def schedule_tasks(prioritized_tasks: List[Dict[str, Any]], fixed_events: List[Dict[str, Any]], current_time_str: str, user_updates: str = "", daily_routine: str = "", goals: str = "") -> List[Dict[str, Any]]:
     """
@@ -103,8 +102,7 @@ async def schedule_tasks(prioritized_tasks: List[Dict[str, Any]], fixed_events: 
         )
         return extract_json_array(response.text)
     except Exception as e:
-        print(f"Error parsing LLM response: {e}")
-        return []
+        raise RuntimeError(f"schedule_tasks error: {e}")
 
 async def modify_schedule(schedule: List[Dict[str, Any]], user_feedback: str, current_time_str: str) -> List[Dict[str, Any]]:
     """
@@ -134,8 +132,7 @@ async def modify_schedule(schedule: List[Dict[str, Any]], user_feedback: str, cu
         )
         return extract_json_array(response.text)
     except Exception as e:
-        print(f"Error parsing LLM response: {e}")
-        return schedule
+        raise RuntimeError(f"modify_schedule error: {e}")
 
 async def process_webhook_interrupt(schedule: List[Dict[str, Any]], interrupt_message: str, current_time_str: str) -> List[Dict[str, Any]]:
     """

@@ -107,6 +107,7 @@ async def on_message(message):
                 daily_routine=daily_routine,
                 goals=goals_md
             )
+            
             system_state["forecast_schedule"] = new_schedule
             
             if not new_schedule:
@@ -123,7 +124,7 @@ async def on_message(message):
             upsert_task_state("system_state", {"status": "AWAITING_REVIEW", "last_updated": datetime.now().isoformat()})
         except Exception as e:
             logger.error(f"Error generating forecast: {e}")
-            await message.channel.send(f"⚠️ Failed to generate nightly forecast: {e}")
+            await message.channel.send(f"⚠️ Failed to generate nightly forecast. Error details:\n```text\n{str(e)[:1500]}\n```")
         return
 
     elif system_state["status"] == "AWAITING_REVIEW":
