@@ -57,7 +57,8 @@ def schedule_tasks(prioritized_tasks: List[Dict[str, Any]], fixed_events: List[D
     {json.dumps(prioritized_tasks, indent=2)}
     
     Create a detailed daily schedule. Fit the highest priority tasks into the available open blocks around the fixed events.
-    Return ONLY a JSON array of scheduled events with keys: "title", "start_time" (ISO format), "end_time" (ISO format), "type" (flexible or fixed).
+    Return ONLY a JSON array of scheduled events with keys: "title", "start_time" (ISO format), "end_time" (ISO format), "type".
+    IMPORTANT RULE: For newly scheduled tasks, you MUST set "type" to "flexible". ONLY pre-existing fixed events should retain "type": "fixed".
     """
     
     try:
@@ -92,6 +93,10 @@ def process_webhook_interrupt(schedule: List[Dict[str, Any]], interrupt_message:
     Inject the urgent interrupt into the schedule immediately.
     Push back, truncate, or drop flexible low-priority tasks as needed. Do NOT alter any 'fixed' events happening in the future. Past events are locked.
     Return ONLY the new modified JSON array of scheduled events with keys: "title", "start_time", "end_time", "type".
+    IMPORTANT RULES:
+    1. For the newly injected urgent task, you MUST set its "type" to "urgent".
+    2. All other shifted tasks MUST remain "type": "flexible".
+    3. DO NOT set "type": "fixed" for anything except the pre-existing fixed events.
     """
     
     try:
