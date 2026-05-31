@@ -51,7 +51,51 @@ async def on_message(message):
         return
         
     # Handle conversational reviews
-    if system_state["status"] == "AWAITING_REVIEW":
+    if system_state["status"] == "AWAITING_UPDATES":
+        logger.info(f"Received updates: {message.content}")
+        await message.channel.send("Processing your updates and fetching tasks from Notion...")
+        
+        # Get real tasks from Notion
+        from notion_service import get_notion_tasks
+        notion_tasks = get_notion_tasks()
+        
+        if not notion_tasks:
+            # Fallback if Notion isn't configured or empty
+            raw_tasks = f"Mock Tasks: Fix the authentication bug. Go to the gym.\nUser Updates: {message.content}"
+        else:
+            raw_tasks = f"Notion Tasks: {notion_tasks}\nUser Updates: {message.content}"
+            
+        goals_md = "Focus on deep engineering sprints and fitness."
+        
+        try:
+            prioritized = await prioritize_tasks(raw_tasks, goals_md)
+            
+            fixed_events = [
+                {"title": "Team Standup", "start_time": "10:00:00", "end_time": "10:30:00", "type": "fixed"}
+            ]
+            
+            berlin_tz = ZoneInfo("Europe/Berlin")
+            new_schedule = await schedule_tasks(prioritized, fixed_events, datetime.now(berlin_tz).isoformat())
+            system_state["forecast_schedule"] = new_schedule
+            
+            if not new_schedule:
+                await message.channel.send("⚠️ The AI failed to generate a valid forecast.")
+                return
+                
+            schedule_markdown = "### Tomorrow's Forecast\n"
+            for ev in new_schedule:
+                schedule_markdown += f"- **{ev.get('title')}**: {ev.get('start_time')} - {ev.get('end_time')}\n"
+                
+            await message.channel.send(schedule_markdown)
+            
+            system_state["status"] = "AWAITING_REVIEW"
+            upsert_task_state("system_state", {"status": "AWAITING_REVIEW", "last_updated": datetime.now().isoformat()})
+        except Exception as e:
+            logger.error(f"Error generating forecast: {e}")
+            await message.channel.send(f"⚠️ Failed to generate nightly forecast: {e}")
+        return
+
+    elif system_state["status"] == "AWAITING_REVIEW":
         logger.info(f"Processing conversational review message: {message.content}")
         client = genai.Client()
         
@@ -180,36 +224,8 @@ async def nightly_triage_job():
     logger.info("Starting Nightly Triage...")
     await send_discord_message("Did you finish the prioritized tasks today? Reply with updates.")
     
-    system_state["status"] = "AWAITING_REVIEW"
-    upsert_task_state("system_state", {"status": "AWAITING_REVIEW", "last_updated": datetime.now().isoformat()})
-    
-    goals_md = "Focus on deep engineering sprints and fitness."
-    raw_tasks = "Fix the authentication bug. Go to the gym. Buy groceries."
-    
-    try:
-        prioritized = await prioritize_tasks(raw_tasks, goals_md)
-        
-        fixed_events = [
-            {"title": "Team Standup", "start_time": "10:00:00", "end_time": "10:30:00", "type": "fixed"}
-        ]
-        
-        berlin_tz = ZoneInfo("Europe/Berlin")
-        new_schedule = await schedule_tasks(prioritized, fixed_events, datetime.now(berlin_tz).isoformat())
-        system_state["forecast_schedule"] = new_schedule
-        
-        if not new_schedule:
-            await send_discord_message("⚠️ The AI failed to generate a valid forecast.")
-            return
-            
-        schedule_markdown = "### Tomorrow's Forecast\n"
-        for ev in new_schedule:
-            schedule_markdown += f"- **{ev.get('title')}**: {ev.get('start_time')} - {ev.get('end_time')}\n"
-            
-        await send_discord_message(schedule_markdown)
-        logger.info("Nightly Triage Forecast sent.")
-    except Exception as e:
-        logger.error(f"Error in nightly triage job: {e}")
-        await send_discord_message(f"⚠️ Failed to generate nightly forecast: {e}")
+    system_state["status"] = "AWAITING_UPDATES"
+    upsert_task_state("system_state", {"status": "AWAITING_UPDATES", "last_updated": datetime.now().isoformat()})
 
 @app.on_event("startup")
 async def startup_event():
