@@ -66,9 +66,9 @@ async def schedule_tasks(prioritized_tasks: List[Dict[str, Any]], fixed_events: 
     "{user_updates}"
     
     Create a detailed daily schedule for tomorrow. 
-    First, schedule any buffer blocks for meals, sleep, hygiene, and gym as specified in the Daily Routine guidelines.
-    Then, fit the highest priority Notion tasks into the available open blocks around the fixed events and routine buffers.
-    If you have empty blocks after scheduling the Notion tasks, proactively schedule tasks that align with the Proactive Goals.
+    1. First, schedule any buffer blocks for meals, sleep, hygiene, and gym as specified in the Daily Routine guidelines.
+    2. Second, you MUST dedicate at least 1-2 hours of the available time to tasks that directly advance the Proactive Goals (e.g. studying German, creating content). Do this BEFORE filling the rest of the day with Notion tasks.
+    3. Third, fit the highest priority Notion tasks into the remaining open blocks around the fixed events, routine buffers, and goal blocks.
     
     Return ONLY a JSON array of scheduled events with keys: "title", "start_time" (ISO format), "end_time" (ISO format), "type".
     IMPORTANT RULES: 
