@@ -58,7 +58,9 @@ async def schedule_tasks(prioritized_tasks: List[Dict[str, Any]], fixed_events: 
     
     Create a detailed daily schedule. Fit the highest priority tasks into the available open blocks around the fixed events.
     Return ONLY a JSON array of scheduled events with keys: "title", "start_time" (ISO format), "end_time" (ISO format), "type".
-    IMPORTANT RULE: For newly scheduled tasks, you MUST set "type" to "flexible". ONLY pre-existing fixed events should retain "type": "fixed".
+    IMPORTANT RULES: 
+    1. For newly scheduled tasks, you MUST set "type" to "flexible". ONLY pre-existing fixed events should retain "type": "fixed".
+    2. Do NOT break down a single task into multiple separate blocks. Schedule each task as a single contiguous time block.
     """
     
     try:

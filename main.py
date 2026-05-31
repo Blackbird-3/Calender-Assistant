@@ -70,12 +70,27 @@ async def on_message(message):
         try:
             prioritized = await prioritize_tasks(raw_tasks, goals_md)
             
-            fixed_events = [
-                {"title": "Team Standup", "start_time": "10:00:00", "end_time": "10:30:00", "type": "fixed"}
-            ]
-            
             berlin_tz = ZoneInfo("Europe/Berlin")
-            new_schedule = await schedule_tasks(prioritized, fixed_events, datetime.now(berlin_tz).isoformat())
+            now_dt = datetime.now(berlin_tz)
+            tomorrow_start = (now_dt + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+            tomorrow_end = tomorrow_start + timedelta(days=1)
+            
+            from calendar_service import get_events
+            raw_events = get_events(time_min=tomorrow_start.isoformat(), time_max=tomorrow_end.isoformat())
+            
+            fixed_events = []
+            for e in raw_events:
+                start = e.get('start', {}).get('dateTime') or e.get('start', {}).get('date')
+                end = e.get('end', {}).get('dateTime') or e.get('end', {}).get('date')
+                if start and end:
+                    fixed_events.append({
+                        "title": e.get('summary', 'Busy'),
+                        "start_time": start,
+                        "end_time": end,
+                        "type": "fixed"
+                    })
+            
+            new_schedule = await schedule_tasks(prioritized, fixed_events, now_dt.isoformat())
             system_state["forecast_schedule"] = new_schedule
             
             if not new_schedule:
@@ -246,7 +261,7 @@ async def nightly_triage_job():
     Executes at 21:00 CEST. Post-mortem & Forecast.
     """
     logger.info("Starting Nightly Triage...")
-    await send_discord_message("Did you finish the prioritized tasks today? Reply with updates.")
+    await send_discord_message("Did you finish your tasks today? Reply with updates, and let me know if there are any extra tasks for tomorrow that aren't on Notion.")
     
     system_state["status"] = "AWAITING_UPDATES"
     upsert_task_state("system_state", {"status": "AWAITING_UPDATES", "last_updated": datetime.now().isoformat()})
