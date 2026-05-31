@@ -66,7 +66,7 @@ async def on_message(message):
         Return ONLY the raw JSON.
         """
         try:
-            response = client.models.generate_content(
+            response = await client.aio.models.generate_content(
                 model='gemini-2.5-flash',
                 contents=prompt,
             )
@@ -128,7 +128,7 @@ async def now_command(ctx, *, task: str = ""):
         })
         
     # 2. Reschedule
-    new_schedule = process_webhook_interrupt(current_schedule, task, current_time)
+    new_schedule = await process_webhook_interrupt(current_schedule, task, current_time)
     
     # 3. Update Google Calendar
     success = update_calendar_schedule(new_schedule)
@@ -185,22 +185,31 @@ async def nightly_triage_job():
     
     goals_md = "Focus on deep engineering sprints and fitness."
     raw_tasks = "Fix the authentication bug. Go to the gym. Buy groceries."
-    prioritized = prioritize_tasks(raw_tasks, goals_md)
     
-    fixed_events = [
-        {"title": "Team Standup", "start_time": "10:00:00", "end_time": "10:30:00", "type": "fixed"}
-    ]
-    
-    berlin_tz = ZoneInfo("Europe/Berlin")
-    new_schedule = schedule_tasks(prioritized, fixed_events, datetime.now(berlin_tz).isoformat())
-    system_state["forecast_schedule"] = new_schedule
-    
-    schedule_markdown = "### Tomorrow's Forecast\n"
-    for ev in new_schedule:
-        schedule_markdown += f"- **{ev.get('title')}**: {ev.get('start_time')} - {ev.get('end_time')}\n"
+    try:
+        prioritized = await prioritize_tasks(raw_tasks, goals_md)
         
-    await send_discord_message(schedule_markdown)
-    logger.info("Nightly Triage Forecast sent.")
+        fixed_events = [
+            {"title": "Team Standup", "start_time": "10:00:00", "end_time": "10:30:00", "type": "fixed"}
+        ]
+        
+        berlin_tz = ZoneInfo("Europe/Berlin")
+        new_schedule = await schedule_tasks(prioritized, fixed_events, datetime.now(berlin_tz).isoformat())
+        system_state["forecast_schedule"] = new_schedule
+        
+        if not new_schedule:
+            await send_discord_message("⚠️ The AI failed to generate a valid forecast.")
+            return
+            
+        schedule_markdown = "### Tomorrow's Forecast\n"
+        for ev in new_schedule:
+            schedule_markdown += f"- **{ev.get('title')}**: {ev.get('start_time')} - {ev.get('end_time')}\n"
+            
+        await send_discord_message(schedule_markdown)
+        logger.info("Nightly Triage Forecast sent.")
+    except Exception as e:
+        logger.error(f"Error in nightly triage job: {e}")
+        await send_discord_message(f"⚠️ Failed to generate nightly forecast: {e}")
 
 @app.on_event("startup")
 async def startup_event():

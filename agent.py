@@ -7,7 +7,7 @@ def get_llm_client():
     # Uses GOOGLE_API_KEY environment variable implicitly
     return genai.Client()
 
-def prioritize_tasks(raw_tasks: str, goals: str) -> List[Dict[str, Any]]:
+async def prioritize_tasks(raw_tasks: str, goals: str) -> List[Dict[str, Any]]:
     """
     Takes unprioritized raw tasks from Notion and goals from Markdown.
     Uses LLM to assign semantic priorities (1-5) and estimate duration.
@@ -27,7 +27,7 @@ def prioritize_tasks(raw_tasks: str, goals: str) -> List[Dict[str, Any]]:
     """
     
     try:
-        response = client.models.generate_content(
+        response = await client.aio.models.generate_content(
             model='gemini-2.5-flash',
             contents=prompt,
         )
@@ -41,7 +41,7 @@ def prioritize_tasks(raw_tasks: str, goals: str) -> List[Dict[str, Any]]:
         print(f"Error parsing LLM response: {e}")
         return []
 
-def schedule_tasks(prioritized_tasks: List[Dict[str, Any]], fixed_events: List[Dict[str, Any]], current_time_str: str) -> List[Dict[str, Any]]:
+async def schedule_tasks(prioritized_tasks: List[Dict[str, Any]], fixed_events: List[Dict[str, Any]], current_time_str: str) -> List[Dict[str, Any]]:
     """
     Computes an optimized schedule for the remaining blocks based on prioritized tasks.
     """
@@ -62,7 +62,7 @@ def schedule_tasks(prioritized_tasks: List[Dict[str, Any]], fixed_events: List[D
     """
     
     try:
-        response = client.models.generate_content(
+        response = await client.aio.models.generate_content(
             model='gemini-2.5-flash',
             contents=prompt,
         )
@@ -71,12 +71,17 @@ def schedule_tasks(prioritized_tasks: List[Dict[str, Any]], fixed_events: List[D
             text = text[7:]
         if text.endswith("```"):
             text = text[:-3]
-        return json.loads(text.strip())
+        
+        parsed = json.loads(text.strip())
+        if not isinstance(parsed, list):
+            print("Error: LLM did not return a JSON array.")
+            return []
+        return parsed
     except Exception as e:
         print(f"Error parsing LLM response: {e}")
         return []
 
-def process_webhook_interrupt(schedule: List[Dict[str, Any]], interrupt_message: str, current_time_str: str) -> List[Dict[str, Any]]:
+async def process_webhook_interrupt(schedule: List[Dict[str, Any]], interrupt_message: str, current_time_str: str) -> List[Dict[str, Any]]:
     """
     Handles a /now command to inject an urgent task and shift flexible tasks.
     """
@@ -100,7 +105,7 @@ def process_webhook_interrupt(schedule: List[Dict[str, Any]], interrupt_message:
     """
     
     try:
-        response = client.models.generate_content(
+        response = await client.aio.models.generate_content(
             model='gemini-2.5-flash',
             contents=prompt,
         )
@@ -109,7 +114,12 @@ def process_webhook_interrupt(schedule: List[Dict[str, Any]], interrupt_message:
             text = text[7:]
         if text.endswith("```"):
             text = text[:-3]
-        return json.loads(text.strip())
+            
+        parsed = json.loads(text.strip())
+        if not isinstance(parsed, list):
+            print("Error: LLM did not return a JSON array.")
+            return schedule
+        return parsed
     except Exception as e:
         print(f"Error parsing LLM response: {e}")
         return schedule
