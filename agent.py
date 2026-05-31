@@ -52,7 +52,7 @@ async def prioritize_tasks(raw_tasks: str, goals: str) -> List[Dict[str, Any]]:
     
     try:
         response = await client.aio.models.generate_content(
-            model='gemini-1.5-flash',
+            model='gemini-3.1-flash-lite',
             contents=prompt,
         )
         return extract_json_array(response.text)
@@ -97,7 +97,7 @@ async def schedule_tasks(prioritized_tasks: List[Dict[str, Any]], fixed_events: 
     
     try:
         response = await client.aio.models.generate_content(
-            model='gemini-1.5-flash',
+            model='gemini-3.1-flash-lite',
             contents=prompt,
         )
         return extract_json_array(response.text)
@@ -127,7 +127,7 @@ async def modify_schedule(schedule: List[Dict[str, Any]], user_feedback: str, cu
     
     try:
         response = await client.aio.models.generate_content(
-            model='gemini-1.5-flash',
+            model='gemini-3.1-flash-lite',
             contents=prompt,
         )
         return extract_json_array(response.text)
@@ -159,7 +159,7 @@ async def process_webhook_interrupt(schedule: List[Dict[str, Any]], interrupt_me
     
     try:
         response = await client.aio.models.generate_content(
-            model='gemini-1.5-flash',
+            model='gemini-3.1-flash-lite',
             contents=prompt,
         )
         text = response.text.strip()
