@@ -2,7 +2,8 @@ import os
 import json
 import logging
 import asyncio
-from datetime import datetime
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 from fastapi import FastAPI
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -106,7 +107,8 @@ async def now_command(ctx, *, task: str = ""):
         await ctx.send("Please specify a task. Example: `/now Urgent meeting for 1 hour`")
         return
         
-    current_time = datetime.now().isoformat()
+    berlin_tz = ZoneInfo("Europe/Berlin")
+    current_time = datetime.now(berlin_tz).isoformat()
     await ctx.send("Fetching active schedule from Google Calendar...")
     
     # 1. Fetch next 24 hours of events from Google Calendar
@@ -189,7 +191,8 @@ async def nightly_triage_job():
         {"title": "Team Standup", "start_time": "10:00:00", "end_time": "10:30:00", "type": "fixed"}
     ]
     
-    new_schedule = schedule_tasks(prioritized, fixed_events, datetime.now().isoformat())
+    berlin_tz = ZoneInfo("Europe/Berlin")
+    new_schedule = schedule_tasks(prioritized, fixed_events, datetime.now(berlin_tz).isoformat())
     system_state["forecast_schedule"] = new_schedule
     
     schedule_markdown = "### Tomorrow's Forecast\n"
